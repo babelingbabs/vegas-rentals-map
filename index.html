@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Vegas Rental Search</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --bg: #FAF9F7; --ink: #1C1B1A; --muted: #6B6864; --line: #E7E4E0;
+    --accent: #C2410C;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg); color: var(--ink);
+    display: flex; flex-direction: column;
+  }
+  header {
+    padding: 18px 28px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    background: var(--bg); z-index: 1000;
+  }
+  header h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  header .meta { font-size: 13px; color: var(--muted); }
+  header .sheet-link {
+    margin-left: auto; font-size: 13px; color: var(--ink);
+    text-decoration: none; border-bottom: 1px solid var(--ink); padding-bottom: 1px;
+  }
+  #wrap { flex: 1; display: flex; min-height: 0; }
+  #map { flex: 1; }
+  aside {
+    width: 340px; overflow-y: auto; border-left: 1px solid var(--line);
+    background: var(--bg); padding: 12px 0;
+  }
+  .zone-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); padding: 14px 20px 6px;
+  }
+  .card {
+    padding: 12px 20px; cursor: pointer; border-left: 3px solid transparent;
+  }
+  .card:hover { background: #F1EFEC; }
+  .card .rent { font-weight: 600; font-size: 15px; }
+  .card .addr { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .card .specs { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .badges { margin-top: 5px; display: flex; gap: 5px; flex-wrap: wrap; }
+  .badge {
+    font-size: 10.5px; padding: 2px 7px; border: 1px solid var(--line);
+    border-radius: 100px; color: var(--muted); background: #fff;
+  }
+  .badge.yes { border-color: #04785733; color: #047857; }
+  .badge.unk { opacity: 0.6; }
+  .leaflet-popup-content-wrapper {
+    border-radius: 10px; box-shadow: 0 2px 16px rgba(28,27,26,0.12);
+    font-family: 'Inter', -apple-system, sans-serif;
+  }
+  .leaflet-popup-content { margin: 16px 18px; min-width: 230px; }
+  .pop .rent { font-size: 17px; font-weight: 600; }
+  .pop .addr { font-size: 13px; color: var(--muted); margin: 3px 0 8px; }
+  .pop .row { font-size: 12.5px; margin: 3px 0; }
+  .pop .row b { font-weight: 500; }
+  .pop .links { margin-top: 10px; display: flex; gap: 14px; }
+  .pop .links a {
+    font-size: 12.5px; color: var(--ink); text-decoration: none;
+    border-bottom: 1px solid var(--ink);
+  }
+  .hub-tip {
+    background: #1C1B1A; color: #FAF9F7; border: none; border-radius: 100px;
+    font-size: 11px; font-weight: 600; padding: 3px 10px;
+    box-shadow: none;
+  }
+  .hub-tip::before { display: none; }
+  .legend {
+    position: absolute; bottom: 24px; left: 24px; z-index: 900;
+    background: rgba(250,249,247,0.94); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 16px; font-size: 12px;
+  }
+  .legend .item { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  @media (max-width: 760px) {
+    aside { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Vegas Rental Search</h1>
+  <span class="meta">28 active listings · under $2,600 · updated July 04, 2026</span>
+  <a class="sheet-link" href="https://docs.google.com/spreadsheets/d/1cnwnFHmZE07e_vq4yB-CT1UibBcZEZpSft1tlYq_ZH0/edit" target="_blank">Open spreadsheet →</a>
+</header>
+<div id="wrap">
+  <div id="map"></div>
+  <aside id="list"></aside>
+</div>
+<div class="legend" id="legend"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const LISTINGS = [{"address": "700 Carnegie St #222, Henderson, NV 89052", "hub": "Green Valley Ranch", "type": "condo", "monthly_rent": 1705, "rent_note": "$1,650 rent + $55.95 benefits pkg", "beds": 2, "baths": 2, "sqft": 1042, "year_built": "", "cats_allowed": "yes (small pets only; $500 non-refundable fee/pet)", "garage": "none (gated community parking)", "ev_charging": "no/unknown (no garage)", "facing_direction": "unknown (balcony faces mountains/city, no rear neighbors - likely west/south)", "distance_to_hub": "~2.2 mi / 7 min to The District", "neighborhood_notes": "MacDonald Ranch gated community w/ pool, gym, clubhouse; upstairs unit, no rear neighbors - quiet; budget option but NO GARAGE", "available_date": "now", "listing_url": "https://www.zumper.com/listings/22712579p/2-bedroom-macdonald-ranch-henderson-nv", "source_site": "Zumper (RentMax PM 702-478-8800)", "lat": 29.728424, "lng": -94.98407}, {"address": "9763 Sage Grove Ct, Las Vegas, NV 89148", "hub": "Durango / Southwest", "type": "house", "monthly_rent": 1955, "rent_note": "best price of SW set", "beds": 3, "baths": 2.5, "sqft": 1342, "year_built": "", "cats_allowed": "yes", "garage": "attached", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "1.5 mi / 5 min to Durango Casino", "neighborhood_notes": "Rhodes Ranch, cul-de-sac court = extra quiet. Fenced yard, porch.", "available_date": "now", "listing_url": "https://www.zumper.com/listings/6999739p/3-bedroom-rhodes-ranch-spring-valley-nv", "source_site": "Zumper", "lat": 36.0752954, "lng": -115.3064421}, {"address": "7275 Forefather St, Las Vegas, NV 89148", "hub": "Durango / Southwest", "type": "house", "monthly_rent": 2005, "rent_note": "", "beds": 3, "baths": 3, "sqft": 1297, "year_built": "", "cats_allowed": "yes", "garage": "attached", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "1.3 mi / 5 min to Durango Casino", "neighborhood_notes": "Rhodes Ranch \u2014 quiet established area, no active construction. Fenced yard, porch.", "available_date": "now", "listing_url": "https://www.zumper.com/listings/12990220p/3-bedroom-rhodes-ranch-spring-valley-nv", "source_site": "Zumper", "lat": 36.0562187, "lng": -115.2868559}, {"address": "11249 Salentino Ave, Las Vegas, NV 89138", "hub": "Red Rock / Summerlin", "type": "house (2-story)", "monthly_rent": 2034, "rent_note": "incl. sewer/trash/HOA; 14 days free promo", "beds": 3, "baths": 2.5, "sqft": 1723, "year_built": "", "cats_allowed": "unknown (Oishi's PM; ask)", "garage": "unknown (typical attached for Vistas homes)", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~0.8 mi / 3 min to Red Rock Casino (closest)", "neighborhood_notes": "The Vistas, Summerlin; Vistas Park <0.5 mi (pool, courts); quiet established area", "available_date": "now", "listing_url": "https://www.zumper.com/listings/8160616p/3-bedroom-las-vegas-nv", "source_site": "Zumper", "lat": 36.1681282, "lng": -115.3418579}, {"address": "9213 Millikan Ave, Las Vegas, NV 89148", "hub": "Durango / Southwest", "type": "house", "monthly_rent": 2040, "rent_note": "", "beds": 3, "baths": 2.5, "sqft": 1421, "year_built": "", "cats_allowed": "yes", "garage": "attached", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "1.6 mi / 5-7 min to Durango Casino", "neighborhood_notes": "Rhodes Ranch \u2014 same street as 9205, mature quiet community, no new-build activity. Fenced yard, smart home.", "available_date": "now", "listing_url": "https://www.zumper.com/listings/797129p/3-bedroom-rhodes-ranch-spring-valley-nv", "source_site": "Zumper", "lat": 36.0538389, "lng": -115.2933846}, {"address": "90 Megan Dr, Henderson, NV 89074", "hub": "Green Valley Ranch", "type": "house", "monthly_rent": 2060, "rent_note": "base $1,980 + required fees", "beds": 2, "baths": 2, "sqft": 1187, "year_built": "", "cats_allowed": "yes", "garage": "attached", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~2.8 mi / 8 min to GVR Resort", "neighborhood_notes": "Green Valley South, quiet street; under renovation w/ new stainless appliances (photos predate upgrade)", "available_date": "2026-07-06", "listing_url": "https://www.zumper.com/address/90-megan-dr-henderson-nv-89074-usa", "source_site": "Zumper (Invitation Homes)", "lat": 36.0334228, "lng": -115.1053317}, {"address": "1771 Lily Pond Cir, Henderson, NV 89012", "hub": "Green Valley Ranch", "type": "townhome", "monthly_rent": 2095, "rent_note": "", "beds": 2, "baths": 2.5, "sqft": 1925, "year_built": "", "cats_allowed": "yes", "garage": "attached 2-car", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~2.5 mi / 7-8 min to The District", "neighborhood_notes": "Gated GVR community w/ pool/spa; HOA-maintained front landscaping; quiet; loft + primary balcony", "available_date": "now", "listing_url": "https://www.zumper.com/address/1771-lily-pond-cir-henderson-nv-89012-usa", "source_site": "Zumper (Premier Property Mgmt 702-938-1300)", "lat": 36.0242314, "lng": -115.0617778}, {"address": "9327 Pyrope Ct, Las Vegas, NV 89148", "hub": "Durango / Southwest", "type": "house", "monthly_rent": 2100, "rent_note": "", "beds": 3, "baths": 2.5, "sqft": 1358, "year_built": "", "cats_allowed": "yes", "garage": "unknown (Rhodes Ranch typically 2-car attached)", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "1.6 mi / 5 min to Durango Casino", "neighborhood_notes": "Rhodes Ranch cul-de-sac court \u2014 quiet, no construction. Smart home.", "available_date": "2026-07-13", "listing_url": "https://www.zumper.com/listings/13936132p/3-bedroom-rhodes-ranch-spring-valley-nv", "source_site": "Zumper", "lat": 36.0559738, "lng": -115.2956939}, {"address": "2684 Heathrow St, Las Vegas, NV 89135", "hub": "Red Rock / Summerlin", "type": "house", "monthly_rent": 2145, "rent_note": "650+ credit required", "beds": 3, "baths": 2.5, "sqft": 1467, "year_built": "", "cats_allowed": "yes (pet-friendly badge, cats+dogs)", "garage": "unknown (likely attached; not tagged)", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~1.2 mi / 4 min to Red Rock Casino", "neighborhood_notes": "Mira Villas; great proximity to Downtown Summerlin, Red Rock Casino & Conservation; residential", "available_date": "now", "listing_url": "https://www.zumper.com/listings/3397496p/3-bedroom-mira-villas-las-vegas-nv", "source_site": "Zumper", "lat": 36.142015865239, "lng": -115.328145789306}, {"address": "10809 Garden Mist Dr #2057, Las Vegas, NV 89135", "hub": "Red Rock / Summerlin", "type": "condo", "monthly_rent": 2150, "rent_note": "", "beds": 2, "baths": 2, "sqft": 1750, "year_built": "", "cats_allowed": "unknown (MLS feed; ask agent)", "garage": "attached 2-car (explicit)", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~2.3 mi / 7 min to Red Rock Casino", "neighborhood_notes": "Garden Terrace gated community, resort pool/fitness, mountain views, quiet South Summerlin; den/office w/ French doors", "available_date": "now", "listing_url": "https://www.zumper.com/listings/21350105p/2-bedroom-mira-villas-las-vegas-nv", "source_site": "Zumper", "lat": 36.1255533, "lng": -115.3265211}, {"address": "129 Primero Way, Henderson, NV 89074", "hub": "Green Valley Ranch", "type": "house", "monthly_rent": 2160, "rent_note": "incl. required fees", "beds": 3, "baths": 2, "sqft": 1245, "year_built": "", "cats_allowed": "yes", "garage": "attached", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~3.2 mi / 9-10 min to GVR Resort", "neighborhood_notes": "Green Valley South; smart-home; HOA community (extra HOA approval may apply)", "available_date": "2026-08-21 (coming soon)", "listing_url": "https://www.zumper.com/address/129-primero-way-henderson-nv-89074-usa", "source_site": "Zumper (Progress Residential)", "lat": 36.0376684, "lng": -115.1112115}, {"address": "122 Elegante Way, Henderson, NV 89074", "hub": "Green Valley Ranch", "type": "house", "monthly_rent": 2220, "rent_note": "incl. required fees", "beds": 3, "baths": 2.5, "sqft": 1646, "year_built": "", "cats_allowed": "yes", "garage": "attached, finished", "ev_charging": "unknown (finished garage is a plus for charger install)", "facing_direction": "unknown", "distance_to_hub": "~3 mi / 9 min to GVR Resort", "neighborhood_notes": "Green Valley South; fenced backyard, covered patio, fireplace, open floor plan; quiet subdivision", "available_date": "now", "listing_url": "https://www.zumper.com/address/122-elegante-way-henderson-nv-89074-usa", "source_site": "Zumper (Invitation Homes)", "lat": 36.036702, "lng": -115.110983}, {"address": "9205 Millikan Ave, Las Vegas, NV 89148", "hub": "Durango / Southwest", "type": "house", "monthly_rent": 2270, "rent_note": "", "beds": 3, "baths": 2.5, "sqft": 1421, "year_built": "", "cats_allowed": "yes (verified)", "garage": "attached (# cars not stated)", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "1.6 mi / 5-7 min to Durango Casino", "neighborhood_notes": "Rhodes Ranch \u2014 established gated golf community (late 1990s-2000s), quiet, NO active construction nearby. Smart-home, fenced yard. Progress Residential.", "available_date": "now", "listing_url": "https://www.zumper.com/listings/10152322p/3-bedroom-rhodes-ranch-spring-valley-nv", "source_site": "Zumper (Progress Residential)", "lat": 36.0538383, "lng": -115.2933249}, {"address": "52 Quiet Desert Ln, Henderson, NV 89074", "hub": "Green Valley Ranch", "type": "house", "monthly_rent": 2270, "rent_note": "incl. required fees", "beds": 3, "baths": 2.5, "sqft": 1510, "year_built": "", "cats_allowed": "yes", "garage": "attached", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~2.5 mi / 7 min to GVR Resort", "neighborhood_notes": "Green Valley South; quiet residential pocket; smart-home; HOA community", "available_date": "2026-07-17", "listing_url": "https://www.zumper.com/address/52-quiet-desert-ln-henderson-nv-89074-usa", "source_site": "Zumper (Progress Residential)", "lat": 36.0306603, "lng": -115.1089518}, {"address": "162 Mirador St, Henderson, NV 89074", "hub": "Green Valley Ranch", "type": "house", "monthly_rent": 2270, "rent_note": "incl. required fees", "beds": 3, "baths": 2.5, "sqft": 1603, "year_built": "", "cats_allowed": "yes", "garage": "attached", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~3.5 mi / 10 min to The District", "neighborhood_notes": "Green Valley South near Wigwam corridor; quiet residential; smart-home", "available_date": "2026-08-12 (coming soon)", "listing_url": "https://www.zumper.com/address/162-mirador-st-henderson-nv-89074-usa", "source_site": "Zumper (Progress Residential)", "lat": 36.0372841, "lng": -115.0610468}, {"address": "3237 Little Stream St, Las Vegas, NV 89135", "hub": "Red Rock / Summerlin", "type": "house (2-story)", "monthly_rent": 2295, "rent_note": "", "beds": 4, "baths": 2.5, "sqft": 1735, "year_built": "", "cats_allowed": "yes (pet-friendly badge, cats+dogs)", "garage": "unknown (typical attached for tract)", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~1.9 mi / 6 min to Red Rock Casino", "neighborhood_notes": "South Summerlin; quiet residential, mature trees, covered patio; easy 215 access; Orange Realty", "available_date": "now", "listing_url": "https://www.zumper.com/listings/6231880p/4-bedroom-mira-villas-las-vegas-nv", "source_site": "Zumper", "lat": 36.132022721517, "lng": -115.322446204468}, {"address": "7024 Pacific Coast St, Las Vegas, NV 89148", "hub": "Durango / Southwest", "type": "house", "monthly_rent": 2295, "rent_note": "", "beds": 3, "baths": 2, "sqft": 1770, "year_built": "", "cats_allowed": "yes", "garage": "attached", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "1.2 mi / 4-5 min to Durango Casino (closest)", "neighborhood_notes": "Rhodes Ranch \u2014 established, quiet, no construction. Fenced yard, balcony, breakfast nook.", "available_date": "2026-07-06", "listing_url": "https://www.zumper.com/listings/3615764p/3-bedroom-rhodes-ranch-spring-valley-nv", "source_site": "Zumper", "lat": 36.0605529, "lng": -115.2933531}, {"address": "10201 Wood Work Ln, Las Vegas, NV 89135", "hub": "Red Rock / Summerlin", "type": "house (single-story)", "monthly_rent": 2300, "rent_note": "", "beds": 3, "baths": 2, "sqft": 1310, "year_built": "", "cats_allowed": "yes ('Cats and Dogs Considered, subject to approval')", "garage": "attached 2-car", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~1.3 mi / 5 min to Red Rock Casino", "neighborhood_notes": "'Quiet Summerlin South Neighborhood'; minutes to Downtown Summerlin & Red Rock Canyon; vaulted ceilings, private backyard", "available_date": "now", "listing_url": "https://www.zumper.com/listings/28836540p/3-bedroom-mira-villas-las-vegas-nv", "source_site": "Zumper", "lat": 36.143767690423, "lng": -115.317293920261}, {"address": "825 Canterra St #1059, Las Vegas, NV 89138", "hub": "Red Rock / Summerlin", "type": "condo (first-floor)", "monthly_rent": 2300, "rent_note": "", "beds": 2, "baths": 2, "sqft": 1466, "year_built": "", "cats_allowed": "unknown (MLS feed; ask agent)", "garage": "attached 2-car tandem (explicit)", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~1.2 mi / <5 min to Red Rock Casino", "neighborhood_notes": "Gated community, resort amenities (pool/spa/fitness), quiet; easy 215 & Summerlin Pkwy access", "available_date": "now", "listing_url": "https://www.zumper.com/listings/21852888p/2-bedroom-las-vegas-nv", "source_site": "Zumper", "lat": 36.1631186, "lng": -115.3532401}, {"address": "825 Canterra St #2060, Las Vegas, NV 89138", "hub": "Red Rock / Summerlin", "type": "condo", "monthly_rent": 2300, "rent_note": "", "beds": 3, "baths": 2, "sqft": 1762, "year_built": "", "cats_allowed": "unknown (same community as #1059; ask agent)", "garage": "attached (likely 2-car tandem)", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~1.2 mi / <5 min to Red Rock Casino", "neighborhood_notes": "Same gated Canterra community; balcony, walk-in closets; quiet, resort amenities", "available_date": "now", "listing_url": "https://www.zumper.com/listings/9530904p/3-bedroom-las-vegas-nv", "source_site": "Zumper", "lat": 36.1631186, "lng": -115.3532401}, {"address": "779 Proud Waters Ct, Las Vegas, NV 89178", "hub": "Durango / Southwest", "type": "house", "monthly_rent": 2300, "rent_note": "", "beds": 3, "baths": 2, "sqft": 1782, "year_built": "", "cats_allowed": "yes", "garage": "unknown", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "3.4 mi / 10 min to Durango Casino", "neighborhood_notes": "89178 court location. CAUTION: Mountain's Edge fringe still has active homebuilding \u2014 verify surrounding blocks before leasing.", "available_date": "listed as available", "listing_url": "https://www.zumper.com/listings/28747749p/3-bedroom-las-vegas-nv", "source_site": "Zumper", "lat": 36.0300911, "lng": -115.3063723}, {"address": "2490 Via Di Autostrada, Henderson, NV 89074", "hub": "Green Valley Ranch", "type": "house", "monthly_rent": 2300, "rent_note": "", "beds": 3, "baths": 2.5, "sqft": 1493, "year_built": "", "cats_allowed": "yes (pet rent/deposit per pet)", "garage": "unknown (typical 2-car attached for subdivision - verify)", "ev_charging": "unknown (home has solar panels - panel may support charger)", "facing_direction": "unknown", "distance_to_hub": "~2 mi / 6 min to GVR Resort", "neighborhood_notes": "Green Valley South; two-story, vaulted ceilings, solar panels; near parks/shopping; quiet", "available_date": "2026-07-07", "listing_url": "https://www.zumper.com/listings/28925859p/3-bedroom-green-valley-south-henderson-nv", "source_site": "Zumper (Faranesh RE & PM 702-523-7151)", "lat": 36.025919, "lng": -115.1000203}, {"address": "10215 Cougar Crossing St, Enterprise, NV 89178", "hub": "Durango / Southwest", "type": "house", "monthly_rent": 2305, "rent_note": "", "beds": 3, "baths": 2.5, "sqft": 1703, "year_built": "", "cats_allowed": "yes", "garage": "attached", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "4.9 mi / 13 min to Durango Casino", "neighborhood_notes": "Mountain's Edge, cul-de-sac + adjacent walking/biking trails = quiet pocket. Outer-89178 new-build caveat \u2014 verify locally.", "available_date": "2026-07-24", "listing_url": "https://www.zumper.com/listings/13794008p/3-bedroom-mountain-edge-enterprise-nv", "source_site": "Zumper", "lat": 36.003596678161, "lng": -115.281266391465}, {"address": "9256 Wild Stampede Ave, Enterprise, NV 89178", "hub": "Durango / Southwest", "type": "house", "monthly_rent": 2325, "rent_note": "", "beds": 3, "baths": 2.5, "sqft": 1668, "year_built": "", "cats_allowed": "yes", "garage": "attached", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "4.7 mi / 12 min to Durango Casino", "neighborhood_notes": "Mountain's Edge master-planned (built ~2005-2015), parks/trails, generally quiet BUT SW edge has some active construction \u2014 drive-by check.", "available_date": "now", "listing_url": "https://www.zumper.com/listings/4968794p/3-bedroom-mountain-edge-enterprise-nv", "source_site": "Zumper", "lat": 36.007617107622, "lng": -115.294825822788}, {"address": "1853 Vista Pointe Ave, Henderson, NV 89012", "hub": "Green Valley Ranch", "type": "house", "monthly_rent": 2325, "rent_note": "base $2,245 + required fees", "beds": 3, "baths": 2, "sqft": 1584, "year_built": "", "cats_allowed": "yes", "garage": "attached (2-car typical)", "ev_charging": "unknown (Invitation Homes usually allows charger install w/ approval)", "facing_direction": "unknown", "distance_to_hub": "~2 mi / 6 min to GVR Resort", "neighborhood_notes": "GVR proper; quiet residential street, fenced yard, fireplace; Invitation Homes smart-home pkg", "available_date": "now", "listing_url": "https://www.zumper.com/address/1853-vis-pointe-ave-henderson-nv-89012-usa", "source_site": "Zumper (Invitation Homes)", "lat": 36.019616, "lng": -115.06603}, {"address": "3213 Carbondale St, Las Vegas, NV 89135", "hub": "Red Rock / Summerlin", "type": "house (single-story)", "monthly_rent": 2395, "rent_note": "", "beds": 3, "baths": 2, "sqft": 1610, "year_built": "", "cats_allowed": "unknown (MLS feed; ask agent)", "garage": "attached (count not stated)", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~1.9 mi / 6 min to Red Rock Casino", "neighborhood_notes": "Very quiet \u2014 'no neighbors behind you'; single story, new carpet/paint; minutes from Downtown Summerlin, parks, pools", "available_date": "now", "listing_url": "https://www.zumper.com/listings/4648769p/3-bedroom-mira-villas-las-vegas-nv", "source_site": "Zumper", "lat": 36.133472654394, "lng": -115.320285919622}, {"address": "9787 Shadymill Ave, Las Vegas, NV 89148", "hub": "Durango / Southwest", "type": "house", "monthly_rent": 2405, "rent_note": "", "beds": 4, "baths": 2.5, "sqft": 2231, "year_built": "", "cats_allowed": "yes", "garage": "attached", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "2.1 mi / 7 min to Durango Casino", "neighborhood_notes": "Rhodes Ranch \u2014 biggest home of the set (4bd/2231sqft). Quiet mature community, fenced yard.", "available_date": "now", "listing_url": "https://www.zumper.com/listings/4804667p/4-bedroom-rhodes-ranch-spring-valley-nv", "source_site": "Zumper", "lat": 36.0944423, "lng": -115.3062086}, {"address": "10296 Magnolia Tree Ave, Las Vegas, NV 89135", "hub": "Red Rock / Summerlin", "type": "house (2-story)", "monthly_rent": 2495, "rent_note": "", "beds": 4, "baths": 2.5, "sqft": 2032, "year_built": "", "cats_allowed": "yes ('Pets considered with pet deposit')", "garage": "unknown (typical attached 2-car for tract)", "ev_charging": "unknown", "facing_direction": "unknown", "distance_to_hub": "~1.1 mi / 4 min to Red Rock Casino", "neighborhood_notes": "Corner lot across from park w/ playground; near top Summerlin schools; newly remodeled; quiet family area", "available_date": "now", "listing_url": "https://www.zumper.com/listings/4282159p/4-bedroom-mira-villas-las-vegas-nv", "source_site": "Zumper", "lat": 36.147339178119, "lng": -115.318175795201}];
+const HUBS = [{"name": "Red Rock Casino", "lat": 36.1587, "lng": -115.3324}, {"name": "Durango Casino", "lat": 36.074, "lng": -115.279}, {"name": "Green Valley Ranch / The District", "lat": 36.0397, "lng": -115.0819}];
+const COLORS = {"Red Rock / Summerlin": "#C2410C", "Durango / Southwest": "#1D4ED8", "Green Valley Ranch": "#047857"};
+
+const map = L.map('map', { zoomControl: true }).setView([36.08, -115.2], 11);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19
+}).addTo(map);
+
+// Hub markers + 3-mile rings
+HUBS.forEach(h => {
+  L.circle([h.lat, h.lng], { radius: 4828, color: '#1C1B1A', weight: 1,
+    opacity: 0.25, fillOpacity: 0.03, dashArray: '4 6' }).addTo(map);
+  L.circleMarker([h.lat, h.lng], { radius: 4, color: '#1C1B1A', fillColor: '#1C1B1A',
+    fillOpacity: 1 }).addTo(map).bindTooltip(h.name, { permanent: true, direction: 'top',
+    offset: [0, -8], className: 'hub-tip' });
+});
+
+function badge(label, val) {
+  const v = (val || 'unknown').toLowerCase();
+  const cls = v.startsWith('yes') ? 'yes' : (v.startsWith('unknown') || v === '' ? 'unk' : '');
+  return `<span class="badge ${cls}">${label}: ${v.split('(')[0].trim()}</span>`;
+}
+
+const markers = {};
+LISTINGS.forEach((r, i) => {
+  const c = COLORS[r.hub] || '#666';
+  const m = L.circleMarker([r.lat, r.lng], {
+    radius: 9, color: '#FAF9F7', weight: 2, fillColor: c, fillOpacity: 0.95
+  }).addTo(map);
+  const gmaps = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(r.address);
+  m.bindPopup(`<div class="pop">
+    <div class="rent">$${r.monthly_rent.toLocaleString()}<span style="font-weight:400;color:#6B6864;font-size:12px"> /mo${r.sqft ? ' · $' + (r.monthly_rent/r.sqft).toFixed(2) + '/sqft' : ''}</span></div>
+    <div class="addr">${r.address}</div>
+    <div class="row"><b>${r.beds}bd ${r.baths}ba</b> · ${r.sqft ? r.sqft.toLocaleString() + ' sqft · ' : ''}${r.type}</div>
+    <div class="row">🐱 ${r.cats_allowed || '?'}</div>
+    <div class="row">🚗 ${r.garage || '?'}</div>
+    <div class="row">⚡ EV: ${r.ev_charging || '?'}</div>
+    <div class="row">📍 ${r.distance_to_hub || ''}</div>
+    <div class="row" style="color:#6B6864">${r.available_date ? 'Available: ' + r.available_date : ''}</div>
+    <div class="links">
+      <a href="${r.listing_url}" target="_blank">Listing →</a>
+      <a href="${gmaps}" target="_blank">Google Maps →</a>
+    </div>
+  </div>`);
+  markers[i] = m;
+});
+
+// Sidebar grouped by hub
+const byHub = {};
+LISTINGS.forEach((r, i) => { (byHub[r.hub] = byHub[r.hub] || []).push([r, i]); });
+const list = document.getElementById('list');
+Object.keys(byHub).forEach(hub => {
+  const lbl = document.createElement('div');
+  lbl.className = 'zone-label'; lbl.textContent = hub + ' · ' + byHub[hub].length;
+  list.appendChild(lbl);
+  byHub[hub].forEach(([r, i]) => {
+    const d = document.createElement('div');
+    d.className = 'card';
+    d.style.borderLeftColor = COLORS[r.hub];
+    d.innerHTML = `<div class="rent">$${r.monthly_rent.toLocaleString()}</div>
+      <div class="addr">${r.address.split(',')[0]}</div>
+      <div class="specs">${r.beds}bd ${r.baths}ba${r.sqft ? ' · ' + r.sqft.toLocaleString() + ' sqft' : ''}</div>
+      <div class="badges">${badge('cats', r.cats_allowed)}${badge('garage', (r.garage||'').includes('attached') ? 'yes, attached' : r.garage)}</div>`;
+    d.onclick = () => { map.setView([r.lat, r.lng], 15); markers[i].openPopup(); };
+    list.appendChild(d);
+  });
+});
+
+// Legend
+const legend = document.getElementById('legend');
+legend.innerHTML = Object.entries(COLORS).map(([h, c]) =>
+  `<div class="item"><span class="dot" style="background:${c}"></span>${h}</div>`).join('') +
+  '<div class="item" style="color:#6B6864;margin-top:6px">◌ dashed ring = 3 mi from hub</div>';
+</script>
+</body>
+</html>
